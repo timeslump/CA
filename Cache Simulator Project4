@@ -1,0 +1,131 @@
+#include<stdio.h>
+#include <string.h>
+
+//      10,4
+#define tag0(x) ((x & 0xFFFFc000) >> 14)
+#define index0(x) ((x & 0x3FF0) >> 4)
+
+// 9,6
+#define tag1(x) ((x & 0xFFFF8000) >> 15)
+#define index1(x) ((x & 0x7FC0) >> 6)
+
+struct type_0{
+	int valid;
+	int tag;
+};
+
+struct type_1{
+	int valid[2];
+	int dirty[2];
+	int tag[2];
+	int LRU;
+};
+
+
+char filename[255];
+char buff[255];
+char LS;
+int add;
+int miss = 0;
+int write = 0;
+int checker = 0;
+struct type_0 type[1024];
+struct type_1 type1[512];
+
+void load(int add, int set){
+	
+	if(set == 0) {
+		if(!type[index0(add)].valid || (type[index0(add)].tag != tag0(add))){
+			miss = miss + 1;
+			type[index0(add)].tag = tag0(add);
+			type[index0(add)].valid = 1;
+		}
+	}
+	
+	else if(set == 1){
+		int lrut = type1[index1(add)].LRU;
+		
+		if(type1[index1(add)].tag[0] == tag1(add)){
+			if(type1[index1(add)].valid[0]){
+				type1[index1(add)].LRU = 1;	
+				return;
+			}
+		}
+		if(type1[index1(add)].tag[1] == tag1(add)){
+			if(type1[index1(add)].valid[1]){
+				type1[index1(add)].LRU = 0;
+				return;
+			}
+		}
+		if(type1[index1(add)].dirty[lrut]){
+			write = write + 1;
+			}
+		miss = miss + 1;
+		type1[index1(add)].dirty[lrut] = 0;
+		type1[index1(add)].tag[lrut] = tag1(add);
+		type1[index1(add)].valid[lrut] = 1;
+		type1[index1(add)].LRU = !lrut;
+	}
+}
+
+void store(int add, int set){ // write through or write back 
+	if(set == 0){
+		write++;
+		if(!type[index0(add)].valid || (type[index0(add)].tag != tag0(add)))
+			miss = miss + 1;	
+
+	}
+	else if(set == 1){
+		int lrut = type1[index1(add)].LRU;
+		if(type1[index1(add)].tag[0] == tag1(add)){
+			if(type1[index1(add)].valid[0]){
+				type1[index1(add)].dirty[0] = 1;
+				type1[index1(add)].LRU = 1;
+				return;
+			}
+		}
+		if(type1[index1(add)].tag[1] == tag1(add)){
+			if(type1[index1(add)].valid[1]){
+				type1[index1(add)].dirty[1] = 1;
+				type1[index1(add)].LRU = 0;
+				return;
+			}
+		}
+		miss = miss + 1;
+
+		if(type1[index1(add)].dirty[lrut]){
+			write = write + 1;
+		}
+		type1[index1(add)].dirty[lrut] = 1;
+		type1[index1(add)].tag[lrut] = tag1(add);
+		type1[index1(add)].valid[lrut] = 1;
+		type1[index1(add)].LRU = !lrut;
+	}
+}
+int main(int argc, char* argv[]){
+	FILE *fp;
+	sprintf(filename,"trace%s.txt",argv[2]);
+	
+	fp = fopen(filename,"r");
+	int i = 0;
+	
+	if(!strcmp(argv[1],"1"))
+		checker = 1;
+	
+	for(i = 0; i++; i < 1024)
+		memset(&type[i], 0, sizeof(struct type_0));
+		
+	for(i = 0; i++; i < 512){
+		memset(&type1[i], 0, sizeof(struct type_1));
+	}
+	while(!feof(fp)){
+		fscanf(fp, "%c %x\n", &LS, &add);
+		if(LS == 'L')
+			load(add, checker);
+		else if(LS == 'S')
+			store(add, checker);			
+	}
+	fclose(fp);
+	
+	printf("%d %d\n",miss, write);
+}
