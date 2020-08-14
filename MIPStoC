@@ -1,0 +1,455 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<math.h>
+
+#define BYTE1 0xFF
+#define BYTE2 0xFF00
+#define BYTE3 0xFF0000
+#define BYTE4 0xFF000000
+#define opcode 0xFC000000
+#define rs 0x03E00000
+#define rt 0x001F0000
+#define rd 0x0000F800
+#define shift 0x000007C0
+#define func 0x3F
+#define imm 0xFFFF
+#define offset 0xFFFF
+#define sa 0x7C0 
+
+/* 가장 많이 사용하는
+rd , rs, rt를 표현 */ 
+void find_d(unsigned int temp){
+	printf("$%d",(temp & rd) >> 11);
+}
+
+void find_s(unsigned int temp){
+	printf("$%d",(temp & rs) >> 21);
+}
+
+void find_t(unsigned int temp){
+	printf("$%d",(temp & rt) >> 16);
+}
+
+// rd -> rs -> rt
+void find_dst(int temp){
+	if((temp & shift)){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+}
+// rd -> rt ->ts
+void find_dts(int temp){
+	if((temp & shift)){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	find_s(temp);
+}
+// rt -> rs -> imm
+void find_tsm(int temp){
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	find_s(temp);
+	printf(", ");
+	printf("%hd", temp & imm);	
+}
+// rs -> rt -> offset
+void find_sto(int temp){
+	printf(" ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & offset);	
+}
+// rt -> offset(rs)
+void find_tos(int temp){
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & offset);	
+	printf("(");
+	find_s(temp);
+	printf(")");
+}
+
+// rt -> imm
+void find_ti(int temp){
+
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & imm);	
+}
+
+// rd -> rt -> sa
+void find_dta(int temp){
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	printf("%d", (temp & sa )>> 6);
+}
+
+// rs -> rt
+void find_st(int temp){
+	if((temp & (shift | rd))){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+}
+
+// target for j series 
+void find_target(int temp){
+	printf(" ");
+	if(((temp&~opcode) & 0x2000000) == 0x2000000)
+		printf("%d ",(temp & ~opcode) - pow(2,25));
+	else 
+		printf("%d ", temp & ~opcode);
+}
+
+/*
+opcode가 000000일 경우 
+func를 확인
+*/ 
+void op_code_0(int temp){
+
+	int checker = 0;
+	switch((temp & func)){
+		case 0x20:
+			printf("add");
+			find_dst(temp);
+			break;
+			
+		case 0x21:
+			printf("addu");
+			find_dst(temp);
+			break;
+			
+		case 36:
+			printf("and");
+			find_dst(temp);
+			break;
+			
+		case 0x1A:
+			printf("div");
+			find_st(temp);
+			break;
+			
+		case 0x1B:
+			printf("divu");
+			find_st(temp);
+			break;
+			
+		case 9:
+			printf("jalr");
+			printf(" ");
+			find_s(temp);
+			break;
+			
+		case 8:
+			printf("jr");
+			printf(" ");
+			find_s(temp);
+			break;
+			
+		case 0x10:
+			printf("mfhi");
+			find_d(temp);
+			break;
+			
+		case 0x12:
+			printf("mflo");
+			printf(" ");
+			find_d(temp);
+			break;
+			
+		case 0x11:
+			printf("mthi");
+			printf(" ");			
+			find_s(temp);
+			break;
+			
+		case 0x13:
+			printf("mtlo");
+			printf(" ");
+			find_s(temp);
+			break;
+			
+		case 0x18:
+			printf("mult");
+			find_st(temp);
+			break;
+			
+		case 0x19:
+			printf("multu");
+			find_st(temp);
+			break;
+			
+		case 0x27:
+			printf("nor");
+			find_dst(temp);
+			break;
+			
+		case 0x25:
+			printf("or");
+			find_dst(temp);
+			break;
+			
+		case 0x0:
+			printf("sll");
+			find_dta(temp);
+			break;
+			
+		case 0x04:
+			printf("sllv");
+			find_dts(temp);
+			break;
+			
+		case 0x2c:
+			printf("slt");
+			find_dst(temp);
+			break;
+			
+		case 0x2d:
+			printf("sltu");
+			find_dst(temp);
+			break;
+			
+		case 0x03:
+			printf("sra");
+			find_dta(temp);
+			break;
+			
+		case 0x07:
+			printf("srav");
+			find_dts(temp);
+			break;
+			
+		case 2:
+			printf("srl");
+			find_dta(temp);
+			break;
+			
+		case 6:
+			printf("srlv");
+			find_dts(temp);
+			break;
+			
+		case 34:
+			printf("sub");
+			find_dst(temp);
+			break;
+			
+		case 35:
+			printf("subu");
+			find_dst(temp);
+			break;
+			
+		case 12:
+			if(rs | rd | rd == 0x0)
+				printf("syscall");
+			break;
+			
+		case 38:
+			printf("xor");
+			find_dst(temp);
+			break;
+		default:
+			printf("unknown instruction");
+		}
+}
+
+/*
+받은 4byte integer의 
+opcode 부분을 확인한다.
+*/ 
+void divide_byte(unsigned int tmp){
+	printf(" ");
+	switch((tmp & opcode) >> 26){
+		case 0:
+			op_code_0(tmp);
+			break;
+		case 8:
+			printf("addi");
+			find_tsm(tmp);
+			break;
+		case 9:
+			printf("addiu");
+			find_tsm(tmp);
+			break;
+		case 12:
+			printf("andi");
+			find_tsm(tmp);
+			break;
+		case 4:
+			printf("beq");
+			find_sto(tmp);
+			break;
+
+		case 5:
+			printf("bne");
+			find_sto(tmp);
+			break;
+
+		case 32:
+			printf("lb");
+			find_tos(tmp);
+			break;
+
+		case 36:
+			printf("lbu");
+			find_tos(tmp);
+			break;
+
+		case 33:
+			printf("lh");
+			find_tos(tmp);
+			break;
+
+		case 37:
+			printf("lhu");
+			find_tos(tmp);
+			break;
+
+		case 15:
+			printf("lui");
+			find_ti(tmp);
+			break;
+			
+		case 35:
+			printf("lw");
+			find_tos(tmp);
+			break;
+
+		case 13:
+			printf("ori");
+			find_tsm(tmp);
+			break;
+		case 40:
+			printf("sb");
+			find_tos(tmp);
+			break;
+
+		case 10:
+			printf("slti");
+			find_tsm(tmp);
+			break;
+			
+		case 11:
+			printf("sltiu");
+			find_tsm(tmp);
+			break;
+			
+		case 41:
+			printf("sh");
+			find_tos(tmp);
+			break;
+
+		case 43:
+			printf("sw");
+			find_tos(tmp);
+			break;
+
+		case 14:
+			printf("xori");
+			find_tsm(tmp);
+			break;
+		case 2:
+			printf("j");
+			find_target(tmp);
+			break;
+		case 3:
+			printf("jal");
+			find_target(tmp);
+			break;
+		default:
+			printf("unknown instruction");
+	}
+}
+
+/*
+Binary 파일을 받고  만약 존재할 경우 
+mips의 assembly 형태로 출력시킨다.
+ 
+*/
+void Invert_hex(char *filename){
+
+	unsigned int temp;
+	int count = 0;
+	
+	FILE * file;
+	file = fopen(filename,"rb");
+	
+	if(file == NULL) {
+		printf("File doesn't exist\n");
+		return;
+	}
+	while(!feof(file)) {
+		fread(&temp, 4, 1, file);
+		if(feof(file))
+			break;
+		printf("inst %d: ",count++);
+		
+		unsigned int edian = ((temp & BYTE1) << 24) + ((temp & BYTE2) << 8)+ ((temp & BYTE3) >> 8) + ((temp & BYTE4) >> 24);
+		printf("%08x",edian);
+		
+		// 4byte 분석하는 부분  
+		divide_byte(edian);		
+		printf("\n");
+	}	
+	fclose(file);
+}
+
+/* main 함수 :
+mip-sim> command에 대한 명령어들을 실행한다.
+ 
+*/ 
+int main(void){
+	int exit = 1;
+	char *buff;
+    char* p;
+    
+    buff = (char *)malloc(sizeof(char) * 100);
+   
+	while(exit){
+		printf("mips-sim> ");
+		scanf("%[^\n]s", buff);	
+	 	p = strtok(buff," ");
+		if(strcmp(p,"exit") == 0){
+			exit = 0; 
+		}
+		if(buff[0] == 0x20){
+			printf("Space exists before the command\n");
+			while (getchar() != '\n');
+			continue;
+		}
+		if(!strcmp(p,"read")){
+			if (strchr(buff + 5, ' ') == NULL)
+				Invert_hex(buff + 5);
+			else 
+				printf("The filename contains space\n");
+		}	
+		while (getchar() != '\n');		
+	}
+	free(buff);
+	return 0;
+}
