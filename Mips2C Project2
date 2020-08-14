@@ -1,0 +1,651 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+
+#define BYTE1 0xFF
+#define BYTE2 0xFF00
+#define BYTE3 0xFF0000
+#define BYTE4 0xFF000000
+#define opcode 0xFC000000
+#define rs 0x03E00000
+#define rt 0x001F0000
+#define rd 0x0000F800
+#define shift 0x000007C0
+#define func 0x3F
+#define imm 0xFFFF
+#define offset 0xFFFF
+#define sa 0x7C0
+
+#define d_(temp) ((temp & rd) >> 11)
+#define s_(temp) ((temp & rs) >> 21)
+#define t_(temp) ((temp & rt) >> 16)
+#define i_(temp)  (unsigned short) (temp & imm)
+#define sa_(temp) ((temp & sa) >> 6)
+
+
+int power(int a,int b){
+	if(b == 0)
+		return 1;
+	else{
+		return a * power(a, b - 1);
+	}
+}
+
+/* 가장 많이 사용하는
+rd , rs, rt를 표현 */ 
+void find_d(unsigned int temp){
+	printf("$%d",(temp & rd) >> 11);
+}
+
+void find_s(unsigned int temp){
+	printf("$%d",(temp & rs) >> 21);
+}
+
+void find_t(unsigned int temp){
+	printf("$%d",(temp & rt) >> 16);
+}
+
+// rd -> rs -> rt
+void find_dst(int temp){
+	if((temp & shift)){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+}
+// rd -> rt ->ts
+void find_dts(int temp){
+	if((temp & shift)){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	find_s(temp);
+}
+// rt -> rs -> imm
+void find_tsm(int temp){
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	find_s(temp);
+	printf(", ");
+	printf("%hd", temp & imm);	
+}
+// rs -> rt -> offset
+void find_sto(int temp){
+	printf(" ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & offset);	
+}
+// rt -> offset(rs)
+void find_tos(int temp){
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & offset);	
+	printf("(");
+	find_s(temp);
+	printf(")");
+}
+
+// rt -> imm
+void find_ti(int temp){
+
+	printf(" ");
+	find_t(temp);
+	printf(", ");
+	printf("%hd", temp & imm);	
+}
+
+// rd -> rt -> sa
+void find_dta(int temp){
+	printf(" ");
+	find_d(temp);
+	printf(", ");
+	find_t(temp);
+	printf(", ");
+	printf("%d", (temp & sa)>> 6);
+}
+
+// rs -> rt
+void find_st(int temp){
+	if((temp & (shift | rd))){
+		printf("unknown instruction");
+		return;
+	}
+	printf(" ");
+	find_s(temp);
+	printf(", ");
+	find_t(temp);
+}
+
+// target for j series 
+void find_target(int temp){
+	printf(" ");
+	if(((temp&~opcode) & 0x2000000) == 0x2000000)
+		printf("%d ",  (temp & ~opcode) - (int) power(2,25));
+	else 
+		printf("%d ", temp & ~opcode);
+}
+
+/*
+opcode가 000000일 경우 
+func를 확인
+*/ 
+int op_code_0(int temp,int read, int reg[32]){
+
+	int checker = 0;
+	switch((temp & func)){
+		case 0x20:
+			if(read) {
+				printf("add $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = reg[s_(temp)] + reg[t_(temp)];
+			}
+			break;
+			
+		case 0x21:
+			if(read) {
+				printf("addu $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = reg[s_(temp)] + reg[t_(temp)];
+			}
+			break;
+			
+		case 36:
+			if(read) {
+				printf("and $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = reg[s_(temp)] & reg[t_(temp)];
+			}
+			break;
+			
+		case 0x1A:
+			printf("div");
+			find_st(temp);
+			break;
+			
+		case 0x1B:
+			printf("divu");
+			find_st(temp);
+			break;
+			
+		case 9:
+			if(read) {
+				printf("jalr $%d, $%d",d_(temp),s_(temp));
+			}
+			else {
+
+			}
+			
+		case 8:
+			printf("jr");
+			printf(" ");
+			find_s(temp);
+			break;
+			
+		case 0x10:
+			printf("mfhi");
+			find_d(temp);
+			break;
+			
+		case 0x12:
+			printf("mflo");
+			printf(" ");
+			find_d(temp);
+			break;
+			
+		case 0x11:
+			printf("mthi");
+			printf(" ");			
+			find_s(temp);
+			break;
+			
+		case 0x13:
+			printf("mtlo");
+			printf(" ");
+			find_s(temp);
+			break;
+			
+		case 0x18:
+			printf("mult");
+			find_st(temp);
+			break;
+			
+		case 0x19:
+			printf("multu");
+			find_st(temp);
+			break;
+			
+		case 0x27:
+			if(read) {
+				printf("nor $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = ~ (reg[s_(temp)] | reg[t_(temp)]);
+			}
+			break;
+			
+		case 0x25:
+			if(read) {
+				printf("or $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = (int) (reg[s_(temp)] | reg[t_(temp)]);
+			}
+			break;
+			
+		case 0x0:
+			if(read) {
+				printf("sll $%d, $%d, %hd",d_(temp),t_(temp),sa_(temp));
+			}
+			else {
+				reg[d_(temp)] =  (int) reg[t_(temp)] * power(2,sa_(temp));
+			}
+			break;
+					
+		case 0x04:
+			if(read) {
+				printf("sllv $%d, $%d, $%d",d_(temp),t_(temp),s_(temp));
+			}
+			else {
+				reg[d_(temp)] = (int) reg[t_(temp)] << reg[s_(temp)];
+			}
+			break;
+					
+		case 0x2a:
+			if(read) {
+				printf("slt $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = (int) (reg[s_(temp)] < reg[t_(temp)]);
+			}
+			break;
+			
+		case 0x2b:
+			if(read) {
+				printf("sltu $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] = (unsigned int) reg[s_(temp)] < reg[t_(temp)];
+			}
+			break;
+			
+		case 0x03:
+			if(read) {
+				printf("sra $%d, $%d, %hd", d_(temp),t_(temp), sa_(temp));
+			}
+			else {
+				int a = sa_(temp);
+				reg[d_(temp)] = reg[t_(temp)] >> (int) sa_(temp);
+			}
+			break;
+			
+		case 0x07:
+			if(read) {
+				printf("srav $%d, $%d, $%d",d_(temp),t_(temp),s_(temp));
+			}
+			else {
+				reg[d_(temp)] = reg[t_(temp)]  >> reg[s_(temp)];
+			}
+			break;
+			
+		case 2:
+			if(read) {
+				printf("srl $%d, $%d, %hd",d_(temp),t_(temp),sa_(temp));
+			}
+			else {
+				reg[d_(temp)] = (unsigned int) reg[t_(temp)] >> sa_(temp);
+			}
+			break;
+			
+		case 6:
+			if(read) {
+				printf("srlv $%d, $%d, $%d",d_(temp),t_(temp),s_(temp));
+			}
+			else {
+				reg[d_(temp)] = (unsigned int) reg[t_(temp)] >> reg[s_(temp)];
+			}
+			break;
+			
+		case 34:
+			if(read) {
+				printf("sub $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] =  (reg[s_(temp)] - reg[t_(temp)]);
+			}
+			break;
+			
+		case 35:
+			if(read) {
+				printf("subu $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] =  (reg[s_(temp)] - reg[t_(temp)]);
+			}
+			break;
+			
+		case 12:
+			if(rs | rd | rd == 0x0)
+				printf("syscall");
+			break;
+			
+		case 38:
+			if(read) {
+				printf("xor $%d, $%d, $%d",d_(temp),s_(temp), t_(temp));
+			}
+			else {
+				reg[d_(temp)] =  (reg[s_(temp)] ^ reg[t_(temp)]);
+			}
+			break;
+		default:
+			printf("unknown instruction\n");
+			return 1;
+		}
+		return 0;
+}
+
+/*
+받은 4byte integer의 
+opcode 부분을 확인한다.
+*/ 
+int divide_byte(int temp,int read,int reg[32]){
+	int checker = 0;
+	switch((temp & opcode) >> 26){
+		case 0:
+			return op_code_0(temp, read, reg);
+			break;
+		case 8:
+			if(read) {
+				printf("addi $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				reg[t_(temp)] = (int) (reg[s_(temp)] + (short) i_(temp));
+			}
+			break;
+		case 9:
+			if(read) {
+				printf("addiu $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				
+				reg[t_(temp)] = (int)(reg[s_(temp)] + (short) i_(temp)) ;
+			}
+			break;
+		case 12:
+			if(read) {
+				printf("andi $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				reg[t_(temp)] = reg[s_(temp)] & (unsigned int) i_(temp);
+			}
+			break;
+		case 4:
+			printf("beq");
+			find_sto(temp);
+			break;
+
+		case 5:
+			printf("bne");
+			find_sto(temp);
+			break;
+
+		case 32:
+			printf("lb");
+			find_tos(temp);
+			break;
+
+		case 36:
+			printf("lbu");
+			find_tos(temp);
+			break;
+
+		case 33:
+			printf("lh");
+			find_tos(temp);
+			break;
+
+		case 37:
+			printf("lhu");
+			find_tos(temp);
+			break;
+
+		case 15:
+			if(read) {
+				printf("lui $%d, %hd",t_(temp), i_(temp));
+			}
+			else {
+				reg[t_(temp)] = i_(temp) << 16;
+			}
+			break;
+			
+		case 35:
+			printf("lw");
+			find_tos(temp);
+			break;
+
+		case 13:
+			if(read) {
+				printf("ori $%d, $%d, %hd",t_(temp), s_(temp), i_(temp));
+			}
+			else {
+				reg[t_(temp)] =  reg[s_(temp)] | (unsigned int) i_(temp);
+			}
+			break; 
+			
+		case 40:
+			printf("sb");
+			find_tos(temp);
+			break;
+
+		case 10:
+			if(read) {
+				printf("slti $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				reg[t_(temp)] = reg[s_(temp)] < (signed int) (short) i_(temp);
+			}
+			break;
+		
+		case 11:
+			if(read) {
+				printf("sltiu $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				reg[t_(temp)] = (unsigned int) reg[s_(temp)] < (unsigned int) (short) i_(temp);
+			}
+			break;
+			
+		case 41:
+			printf("sh");
+			find_tos(temp);
+			break;
+
+		case 43:
+			printf("sw");
+			find_tos(temp);
+			break;
+
+		case 14:
+			if(read) {
+				printf("xori $%d, $%d, %hd",t_(temp),s_(temp),i_(temp));
+			}
+			else {
+				reg[t_(temp)] = reg[s_(temp)] ^ (unsigned int) i_(temp);
+			}
+			break;
+		case 2:
+			printf("j");
+			find_target(temp);
+			break;
+		case 3:
+			printf("jal");
+			find_target(temp);
+			break;
+		default:
+			printf("unknown instruction\n");
+			return 1;
+	}
+	return 0;
+}
+
+/*
+Binary 파일을 받고  만약 존재할 경우 
+mips의 assembly 형태로 출력시킨다.
+ 
+*/
+void Invert_hex(char *filename){
+
+	unsigned int temp;
+	int count = 0;
+	
+	FILE * file;
+	file = fopen(filename,"rb");
+	unsigned int edian;
+	if(file == NULL) {
+		printf("File doesn't exist\n");
+		return;
+	}
+	while(!feof(file)) {
+		fread(&temp, 4, 1, file);
+		if(feof(file))
+			break;
+		printf("inst %d: ",count++);
+		
+		edian = ((temp & BYTE1) << 24) + ((temp & BYTE2) << 8)+ ((temp & BYTE3) >> 8) + ((temp & BYTE4) >> 24);
+		printf("%08x ",edian);
+		
+		// 4byte 분석하는 부분  
+		divide_byte(edian, 1, 0);		
+		printf("\n");
+	}	
+	fclose(file);
+}
+
+void loadinst(char *filename, int arr[65536]){
+	unsigned int temp;
+	unsigned int edian;
+	FILE * file;
+	file = fopen(filename,"rb");
+	int i = 0;
+	if(file == NULL) {
+		printf("File doesn't exist\n");
+		return;
+	}
+	while(!feof(file)) {
+		fread(&temp, 4, 1, file);
+		if(feof(file))
+			break;
+		edian = ((temp & BYTE1) << 24) + ((temp & BYTE2) << 8)+ ((temp & BYTE3) >> 8) + ((temp & BYTE4) >> 24);
+		arr[4 * i] = edian;
+		i++;
+	}
+}
+
+
+void Memset(int arr[65536]){
+	int i;
+	for(i = 0; i < 65536; i ++)
+		arr[i] = 0xFFFFFFFF;
+}
+
+void Regset(int arr[32]){
+	int i;
+	for(i = 0; i < 32; i ++)
+		arr[i] = 0;
+}
+
+
+/* main 함수 :
+mip-sim> command에 대한 명령어들을 실행한다.
+ 
+*/
+int main(void){
+	int exit = 1;
+	char buff[100];
+    char* p;
+    int i = 0;
+    
+	int reg[32] = {0, };
+	int instmem[65536];
+	Memset(instmem);
+
+	int pc = 0;
+	while(exit){
+		printf("mips-sim> ");
+		scanf("%[^\n]s", buff);	
+	 	p = strtok(buff," ");
+	 	// 예외 처리하는 부분  
+		if(!strcmp(p,"exit")){
+			exit = 0; 
+		}
+		if(buff[0] == 0x20){
+			printf("Space exists before the command\n");
+			while (getchar() != '\n');
+			continue;
+		}
+		
+		
+		if(!strcmp(p,"read")){
+			if (strchr(buff + 5, ' ') == NULL)
+				Invert_hex(buff + 5);
+			else 
+				printf("The filename contains space\n");
+		}	
+		
+		else if(!strcmp(p,"registers")){
+			for(i = 0; i < 32; i++)
+				printf("$%d: 0x%08x\n", i, reg[i]);
+			printf("PC: 0x%08x\n",pc);
+		}
+		
+		
+		else if(!strcmp(p,"loadinst")){
+			if (strchr(buff + 9, ' ') == NULL){
+				pc = 0;
+				Memset(instmem);
+				Regset(reg);
+				loadinst(buff + 9, instmem);
+			}
+			else 
+				printf("The filename contains space\n");
+		}
+		
+		
+		else if(!strcmp(p,"run")){
+			int num = atoi(buff + 4);
+			pc = 0;
+			Regset(reg);
+			for(i = 0; i < num; i++){
+				if(divide_byte(instmem[pc], 0, reg)){
+					pc = pc + 4;
+					i++;
+					break;
+				}
+				pc = pc + 4;
+			}	
+			printf("Executed %d instructions\n", i);
+			
+		}
+	while (getchar() != '\n');
+
+	}
+	return 0;
+}
+
